@@ -1,0 +1,200 @@
+---
+title: "group_optimization"
+author: "Archana Gadicharla, Nikhila Reddy Vantari"
+date: "2024-12-11"
+output: html_document
+---
+
+## Introduction
+
+This document formulates and solves a mathematical optimization problem to form 4 groups of 3 students each, maximizing the chance of success on a class project based on three defined factors.
+
+## Step 1: Define Factors
+
+We define three factors affecting group success:
+
+1. **GPA**: Higher GPA contributes to project success.
+2. **Teamwork Skills**: Rated on a scale from 1 to 5.
+3. **Project Experience**: Number of past projects completed.
+
+These factors will be combined into a weighted score to measure each student's potential contribution.
+
+
+## Step 2: Generate Data
+
+We'll randomly generate data for 12 students for the three factors.
+
+```{r, message=FALSE, warning=FALSE}
+set.seed(123)  # For reproducibility
+
+# Number of students
+n_students <- 12
+
+# Generate random data for each factor
+students <- data.frame(
+  ID = 1:n_students,
+  GPA = round(runif(n_students, 2.5, 4.0), 2),                # Random GPA between 2.5 and 4.0
+  Teamwork_Skills = sample(1:5, n_students, replace = TRUE),  # Random teamwork skills score between 1 and 5
+  Project_Experience = sample(0:5, n_students, replace = TRUE) # Random project experience between 0 and 5
+)
+
+# Calculate the success score with weights:
+# GPA = 0.5, Teamwork Skills = 0.3, Project Experience = 0.2
+students$Success_Score <- round(
+  students$GPA * 0.5 + students$Teamwork_Skills * 0.3 + students$Project_Experience * 0.2,
+  3
+)
+
+print(students)
+```
+
+
+
+## Step 3: Calculate Success Scores
+
+We'll calculate a success score for each student based on weighted factors:
+
+- **GPA Weight**: 0.5  
+- **Teamwork Skills Weight**: 0.3  
+- **Project Experience Weight**: 0.2  
+
+```{r}
+# Define weights
+weights <- c(GPA = 0.5, Teamwork_Skills = 0.3, Project_Experience = 0.2)
+
+# Compute success score for each student
+students$Success_Score <- with(students, 
+  GPA * weights["GPA"] + Teamwork_Skills * weights["Teamwork_Skills"] + Project_Experience * weights["Project_Experience"])
+
+# Display student data with success scores
+print(students)
+```
+
+## Step 4: Define the Optimization Problem
+
+We want to form 4 groups of 3 students each, maximizing the total group success score.
+
+### Decision Variables
+
+Let \(x_{ij}\) be a binary variable:
+
+- \(x_{ij} = 1\) if student \(i\) is assigned to group \(j\)  
+- \(x_{ij} = 0\) otherwise
+
+### Objective Function
+
+Maximize the total success score:
+
+\[
+\text{Maximize } \sum_{i=1}^{12} \sum_{j=1}^{4} S_i \cdot x_{ij}
+\]
+
+Where \(S_i\) is the success score of student \(i\).
+
+### Constraints
+
+1. Each student is assigned to exactly one group:
+
+   \[
+   \sum_{j=1}^{4} x_{ij} = 1 \quad \forall i \in \{1, \ldots, 12\}
+   \]
+
+2. Each group has exactly 3 students:
+
+   \[
+   \sum_{i=1}^{12} x_{ij} = 3 \quad \forall j \in \{1, \ldots, 4\}
+   \]
+
+
+## Step 5: Solve the Optimization Problem
+
+We'll use the `lpSolve` package to solve the linear programming problem.
+
+```{r, message=FALSE, warning=FALSE}
+# Load lpSolve package
+library(lpSolve)
+
+# Number of students and groups
+n_students <- 12
+n_groups <- 4
+group_size <- 3
+
+# Calculate success scores with predefined weights
+weights <- c(GPA = 0.5, Teamwork_Skills = 0.3, Project_Experience = 0.2)
+students$Success_Score <- with(students,
+  GPA * weights["GPA"] + Teamwork_Skills * weights["Teamwork_Skills"] + Project_Experience * weights["Project_Experience"]
+)
+
+# Display student data
+print(students)
+
+# Objective function (flatten the success scores)
+success_scores <- as.vector(t(matrix(rep(students$Success_Score, n_groups), nrow = n_groups, byrow = TRUE)))
+
+# Decision variables matrix: x[i, j] where i = student, j = group
+# Flattened, this becomes a vector of length n_students * n_groups
+n_vars <- n_students * n_groups
+
+# Constraint matrix and RHS
+# Each student must be assigned to exactly one group
+student_constraints <- matrix(0, nrow = n_students, ncol = n_vars)
+for (i in 1:n_students) {
+  student_constraints[i, ((i - 1) * n_groups + 1):(i * n_groups)] <- 1
+}
+
+# Each group must have exactly 3 students
+group_constraints <- matrix(0, nrow = n_groups, ncol = n_vars)
+for (j in 1:n_groups) {
+  group_constraints[j, seq(j, n_vars, by = n_groups)] <- 1
+}
+
+# Combine constraints
+constraint_matrix <- rbind(student_constraints, group_constraints)
+
+# Right-hand side constraints
+rhs <- c(rep(1, n_students), rep(group_size, n_groups))
+
+# Constraint directions
+directions <- c(rep("=", n_students + n_groups))
+
+# Solve the optimization problem
+solution <- lp("max", success_scores, constraint_matrix, directions, rhs, all.bin = TRUE)
+
+# Check if the solution is optimal
+if (solution$status == 0) {
+  cat("Solution found!\n\n")
+} else {
+  stop("No optimal solution found.")
+}
+
+# Display the assignment matrix
+assignment <- matrix(solution$solution, nrow = n_students, byrow = TRUE)
+colnames(assignment) <- paste("Group", 1:n_groups)
+rownames(assignment) <- paste("Student", students$ID)
+
+print(assignment)
+
+# Display group assignments
+for (j in 1:n_groups) {
+  cat("\n**Group", j, "Members:**\n")
+  group_members <- students$ID[which(assignment[, j] == 1)]
+  print(students[students$ID %in% group_members, ])
+}
+
+```
+
+## Step 6: Group Assignments
+
+Let's display the final group assignments.
+
+```{r}
+for (j in 1:n_groups) {
+  cat("\n**Group", j, "Members:**\n")
+  group_members <- students$ID[which(assignment[, j] == 1)]
+  print(students[students$ID %in% group_members, ])
+}
+```
+
+## Conclusion
+
+We successfully formulated and solved a mathematical optimization problem to form 4 groups of 3 students each, maximizing their potential success based on GPA, teamwork skills, and project experience.
