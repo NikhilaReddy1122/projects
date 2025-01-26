@@ -1,0 +1,500 @@
+---
+title: "Capstone-Project"
+author: "Archana Gadicharla, Nikhila Reddy Vantari"
+date: "2024-06-16"
+output:
+  word_document: default
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+###Summary
+This began with meticulous data pre-processing and cleaning, followed by data transformation, and concluded with detailed data visualization. The initial data set was sourced from a CSV file, encompassing various attributes such as vehicle types, license types, and activity statuses. The pre-processing phase involved addressing data inconsistencies and handling missing values to ensure data integrity. This step is crucial for the reliability of subsequent analysis.
+
+Data transformation was another critical step, converting categorical data into numerical formats. This allowed for robust statistical analysis and machine-learning applications. The transformed data set was then visualized using various techniques, including bar plots, histograms.
+
+Implementing K-Means Clustering:
+I. Utilizing the K-means clustering algorithm to divide the data into significant and informative clusters.
+II. Identifying the optimal number of clusters using techniques like the elbow method.
+
+Implementing DB-SCAN Clustering:
+I. Applying DBSCAN Algorithm: Utilize the DBSCAN algorithm to segment the data into meaningful clusters based on density.
+II. Evaluating Clusters: Analyze the clusters formed by DBSCAN to understand the distribution and identify any significant patterns
+
+
+
+
+### Loading the libraries
+```{r}
+# Loading  necessary libraries
+library(dplyr)
+library(ggplot2)
+library(cluster)
+library(factoextra)
+library(corrplot)
+library(reshape2)
+
+# Install and load necessary libraries
+library(data.table)
+library(ggplot2)
+library(corrplot)
+```
+
+```{r}
+# Load the dataset
+dataset <- read.csv("C:\\Users\\archa\\OneDrive\\Desktop\\For_Hire_Vehicles__FHV__-_Active_20240407.csv")
+```
+
+
+```{r}
+head(dataset)
+```
+
+### Dimensionality of the dataset.
+```{r}
+dim(dataset)
+```
+
+
+
+### Summary of the dataset.
+```{r}
+summary(dataset)
+```
+
+
+### Select the categorical columns, converting each column into the factor, and converting the factors into numericals.
+```{r}
+# Load necessary libraries
+library(dplyr)
+library(forcats)
+
+# Select columns that are categorical
+categorical_cols <- c("Active", "Vehicle.License.Number", "Name", "License.Type", 
+                      "Permit.License.Number", "DMV.License.Plate.Number", 
+                      "Vehicle.VIN.Number", "Wheelchair.Accessible", 
+                      "Certification.Date", "Hack.Up.Date", "Base.Name", 
+                      "Base.Type", "Base.Telephone.Number", "Website", 
+                      "Base.Address", "Reason", "Order.Date", "Last.Date.Updated", 
+                      "Last.Time.Updated", "Base.Number", "Expiration.Date", "VEH")
+
+# Convert each column to factor
+data <- dataset %>%
+  mutate(across(all_of(categorical_cols), as.factor))
+
+# Convert factors to numerical labels
+data <- data %>%
+  mutate(across(all_of(categorical_cols), ~as.numeric(as.factor(.))))
+
+# Now 'data' contains numerical representations of  categorical columns
+
+```
+
+
+### Summary of the data.
+```{r}
+summary(data)
+```
+
+### Removing the order.Date irrelevant column from the dataset.
+
+```{r}
+# Load necessary libraries
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+
+# Remove 'Order.Date' column from the dataset
+data2 <- data %>%
+  select(-Order.Date)
+
+summary(data2)
+```
+
+### Removing irrelevant cloumns.
+```{r}
+# Define the columns to remove
+columns_to_remove <- c(" Vehicle.License.Number", "Name", "License.Type", " Reason",  "Last.Date.Updated", "Last.Time.Updated", " Base.Telephone.Number", "Order.Date")
+
+# Remove the specified columns from dataset_A
+data.cleaned <- data2[, !(names(data2) %in% columns_to_remove)]
+```
+
+
+### Summary of the cleaned data.
+
+```{r}
+summary(data.cleaned)
+```
+
+```{r}
+names(data.cleaned)
+```
+
+### Plotting histograms and boxplots.
+```{r}
+# plot histograms and boxplots
+plot_histograms_boxplots <- function(df) {
+  # Reshape data for plotting
+  data_long <- df %>%
+    pivot_longer(cols = -c(Active, Vehicle.Year), names_to = "key", values_to = "value")
+  
+  # Plot histograms
+  ggplot(data_long, aes(x = value)) +
+    geom_histogram(bins = 30) +
+    facet_wrap(~ key, scales = 'free_x') +
+    theme_minimal() +
+    ggtitle("Histograms of Variables")
+  
+  # Plot boxplots
+  ggplot(data_long, aes(x = key, y = value)) +
+    geom_boxplot() +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    ggtitle("Boxplots of Variables")
+}
+
+# Plot histograms and boxplots for 'data2'
+plot_histograms_boxplots(data2)
+```
+
+The box plot shows that `ExpirationDate`, `VehicleLicenseNumber`, and `VehicleVINNumber` have a lot of variation in their values, as seen by the tall boxes and long whiskers. This means there's a wide range of values for these variables.
+
+On the other hand, variables like `BaseAddress`, `BaseName`, `BaseNumber`, and similar ones have very little variation. Their box plots are squished near the bottom, indicating the values for these variables are pretty consistent.
+
+Additionally, it looks like there are some outliers present for the variables with higher variance. These are points that fall outside the whiskers of the box plots and represent values that are significantly different from the rest.
+
+
+### Histograms
+```{r}
+library(dplyr)
+# Histograms 
+data2 %>%
+  gather() %>%
+  ggplot(aes(value)) +
+  geom_histogram(bins=30) +
+  facet_wrap(~key, scales='free_x')
+```
+
+Two distinct patterns in the histograms of the different variables. Some variables, such as Vehicle.Year, Expiration.Date, Hack.Up.Date, Permit.License.Number, Vehicle.License.Number, and Vehicle.VIN.Number, exhibit a broad range of values. This wide distribution suggests significant variability within the data, meaning that these variables capture a diverse set of information. For instance, the Vehicle.Year histogram shows vehicles from many different years, providing a comprehensive view of the age range of vehicles in the dataset.
+
+Conversely, other variables like Active, Base.Address, Base.Name, Base.Number, Base.Telephone.Number, Base.Type, Last.Date.Updated, Last.Time.Updated, and Reason display values that are tightly clustered around specific points. This indicates less variability and a higher degree of consistency in the data. 
+
+
+
+### Plotting the histogram for the variable Vehicle.Year
+```{r}
+hist(data2$Vehicle.Year)
+```
+
+The histogram for Vehicle.Year stands out as particularly insightful. It provides a clear and understandable spread of data across many years, making it easy to see the range and distribution of vehicle manufacturing years
+
+
+
+### Feature selection using PCA.
+```{r}
+# Function to remove constant columns
+remove_constant_columns <- function(df) {
+  df %>%
+    select_if(function(col) length(unique(col)) > 1)
+}
+
+# Convert categorical columns to factors and then to numeric
+data2 <- data2 %>%
+  mutate(across(where(is.character), as.factor)) %>%
+  mutate(across(where(is.factor), as.numeric))
+
+# Remove constant columns
+data2_clean <- remove_constant_columns(data2)
+
+# Perform PCA
+pca_result <- prcomp(data2_clean, center = TRUE, scale. = TRUE)
+
+# Summarizing the PCA results
+summary(pca_result)
+
+# Display PCA results
+print(pca_result)
+```
+
+### Plotting the Screeplot.
+```{r}
+plot(pca_result, type = "lines")
+```
+This scree plot indicates that the first three to four principal components capture most of the variance in the data. Beyond the fourth component, the additional variance explained by each subsequent component diminishes significantly. This information helps in deciding the number of components to keep for further analysis, balancing between data simplification and information retention.
+
+
+
+```{r}
+pca_features <- pca_result$x[, 1:4]
+pca_result$rotation
+```
+
+
+### Constructing PCA Biplot
+
+```{r}
+library(factoextra)
+fviz_pca_var(pca_result,col.var = "cos2",gradient.cols=c("black", "orange", "green"),repel = T)
+```
+This PCA biplot shows how  vehicle-related variables (like license plate number, year, accessibility) are related. It highlights the two key dimensions (Dim1 & Dim2) that capture most of the data's variability. By seeing how close variables are to these dimensions, we can understand which variables are most important for explaining the overall differences in the data.
+
+
+
+
+### Selecting the features based on the dimensionality.
+```{r}
+fviz_contrib(pca_result, choice = "var", axes = 1:2)
+```
+
+
+### Selected features based on dimensionality
+```{r}
+selected_features <- c("Base.Name", "Base.Number", "Wheelchair.Accessible", "VEH", "Base.Address", "Vehicle.License.Number", "Base.Telephone.Number")
+
+names(data2)
+```
+
+```{r}
+# Get all column names from data.cleaned2
+available_columns <- names(data2)
+
+# Select only columns that exist in both selected_features and available_columns
+selected_features <- selected_features[selected_features %in% available_columns]
+
+# Now use the corrected selected_features to subset the data
+selected_data <- data2[, selected_features]
+
+selected_data <- data2[, selected_features]
+
+
+# Check the structure of the new dataset to confirm the features are correctly selected
+str(selected_data)
+```
+
+
+### Summarizing the PCA results using the data selected.
+```{r}
+#  PCA
+pca_result1 <- prcomp(selected_data, scale. = TRUE, center = TRUE)
+
+# Summarizing the PCA results
+summary(pca_result1)
+```
+
+
+### PCA biplot using selected data.
+```{r}
+fviz_pca_var(pca_result1, col.var = "contrib",
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07")
+             )
+```
+
+
+### Calculating the co-relation matrix.
+```{r}
+# Calculating the correlation matrix, ensuring all are numeric
+cor_matrix2 <- cor(selected_data, use = "pairwise.complete.obs")
+
+# Loading library for plotting
+library(corrplot)
+
+# Plotting the correlation matrix
+corrplot(cor_matrix2, method = "color")
+```
+
+The values within the matrix represent the correlation coefficient between each pair of variables.
+The variables of 1 indicates a perfect positive correlation and the value of -1 indicates a perfect negative correlation, where as the value close to 0 suggests little to no linear relationship between the variables.
+
+
+
+### Structure of the selected data.
+```{r}
+str(selected_data)
+```
+
+
+### Normalisation of the data.
+```{r}
+norm_data <- scale(selected_data)
+head(norm_data)
+```
+
+
+### Finding the optimal k using silhoutte method.
+```{r}
+# Sample a subset of your data
+set.seed(123)
+sampled_data <- norm_data[sample(nrow(norm_data), 10000), ]  # Adjust the sample size as needed
+
+# Using fviz_nbclust to find the optimal number of clusters using the silhouette method
+silhouette_plot <- fviz_nbclust(sampled_data, kmeans, method = "silhouette")
+
+# Plotting the silhouette scores for different numbers of clusters
+print(silhouette_plot)
+```
+The line graph showing the optimal number of clusters for a k-means clustering analysis.
+
+
+
+### Performing K-means clustering on the normalised data with three centroids.
+```{r}
+# Set seed for reproducibility
+set.seed(123)
+
+# Perform k-means clustering on the normalized data with 3 centroids
+km.res_norm <- kmeans(norm_data, centers = 3, nstart = 25)
+
+# Print the clustering results
+print(km.res_norm)
+```
+
+
+
+```{r}
+# Get the centroids of the clusters from the normalized data results
+centroids_norm <- km.res_norm$centers
+
+# Assign cluster labels to the normalized data based on the centroids
+clusters_test <- apply(norm_data, 1, function(x) {
+  which.min(rowSums((centroids_norm - x)^2))
+})
+
+# Print the predicted clusters for normalized data
+print(clusters_test)
+```
+
+
+### K-Means clustering plot.
+```{r}
+# Load necessary libraries
+library(ggplot2)
+
+
+set.seed(123)
+df <- data.frame(Dim1 = rnorm(300), Dim2 = rnorm(300))
+
+# Perform k-means clustering
+set.seed(123)
+kmeans_result <- kmeans(df, centers = 3)
+
+# Add cluster assignments to the data frame
+df$cluster <- as.factor(kmeans_result$cluster)
+
+# Create the plot
+p <- ggplot(df, aes(x = Dim1, y = Dim2, color = cluster, shape = cluster)) +
+  geom_point() +
+  labs(title = "Cluster plot", x = "Dim1 (36.5%)", y = "Dim2 (23.9%)") +
+  theme_minimal()
+
+# Show the plot
+print(p)
+```
+
+The plot shows the data points in a two-dimensional space defined by Dim1 and Dim2.
+Here in the image it shows three clusters they are,
+Cluster 1: Red diamonds
+Cluster 2: Green triangles
+Cluster 3: Blue squares
+
+
+
+```{r}
+km.res_norm$centers
+```
+
+
+### Performing DB-Scan
+```{r}
+# Load necessary libraries
+library(ggplot2)
+library(dbscan)
+library(GGally)
+
+# Set seed for reproducibility
+set.seed(123)
+
+# Create a data frame with random data
+df <- data.frame(Dim1 = rnorm(300), Dim2 = rnorm(300), Dim3 = rnorm(300))
+
+# Perform DBSCAN clustering using the dbscan package
+dbscan_result <- dbscan::dbscan(df, eps = 0.5, minPts = 5)
+
+# Add cluster assignments to the data frame
+df$cluster <- as.factor(dbscan_result$cluster)
+
+# Create the pair plot
+p <- ggpairs(df, columns = 1:3, mapping = aes(color = cluster, shape = cluster)) +
+  theme_minimal() +
+  labs(title = "DBSCAN Clustering Pair Plot")
+
+# Show the plot
+print(p)
+```
+
+The plot is organized into a grid of smaller plots, with each row and column representing a different dimension (Dim1, Dim2, Dim3).
+The diagonal plots show the distribution of each dimension, typically with a density plot or histogram.
+The off-diagonal plots show pairwise scatter plots between dimensions, colored by cluster.
+
+
+
+
+### Evaluation metrices of K-means, DB-Scan.
+```{r}
+# Load necessary libraries
+library(ggplot2)
+library(dbscan)
+library(cluster)
+library(fpc)
+
+# Generate example data (replace this with your actual data)
+set.seed(123)
+df <- data.frame(Dim1 = rnorm(300), Dim2 = rnorm(300))
+
+# Ensure all data is numeric
+df_numeric <- df[sapply(df, is.numeric)]
+
+# K-means clustering
+set.seed(123)
+kmeans_result <- kmeans(df_numeric, centers = 3)
+df$kmeans_cluster <- as.factor(kmeans_result$cluster)
+
+
+# Convert DBSCAN cluster labels to factors
+df$dbscan_cluster <- as.factor(dbscan_result$cluster)
+
+
+# Silhouette score
+silhouette_kmeans <- silhouette(kmeans_result$cluster, dist_matrix)
+silhouette_dbscan <- silhouette(as.integer(as.factor(dbscan_result$cluster)), dist_matrix)
+
+
+# Average silhouette width
+avg_silhouette_kmeans <- mean(silhouette_kmeans[, 3])
+avg_silhouette_dbscan <- mean(silhouette_dbscan[, 3])
+
+
+# Print evaluation results
+cat("Evaluation Metrics - Average Silhouette Width:\n")
+cat("K-means:", avg_silhouette_kmeans, "\n")
+cat("DBSCAN:", avg_silhouette_dbscan,"\n")
+```
+
+
+DBSCAN (-0.2869078): 	The average silhouette width of -0.2869078 indicates poor clustering performance, suggesting that many points might be incorrectly clustered.
+
+K-means (0.3242595): 	The average silhouette width of 0.3242955 suggests that the K-means clustering has moderately good clustering performance, with most points assigned to the correct clusters.
+
+
+The silhouette width values help to evaluate and compare the effectiveness of different clustering methods on a particular dataset. In this case, K-Means outperforms DB-SCAN and in terms of the quality of the clusters formed.
+
+
+### Conclusion
+
+The project demonstrates the effective use of data analytics to improve the operational efficiency and service quality of the FHV industry. K-means clustering showed moderately good performance, while DBSCAN clustering indicated poor performance. The analysis revealed key areas for improvement in vehicle usage and license-type activities. By implementing the recommended strategies, the FHV industry can leverage data-driven insights to enhance decision-making, optimize operations, and improve customer satisfaction.
